@@ -1,0 +1,9 @@
+[Unit]
+Description=cpulimit
+
+[Service]
+ExecStart=/usr/local/bin/cpulimit.sh
+Restart=always
+
+[Install]
+WantedBy=default.target
