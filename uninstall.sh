@@ -7,10 +7,10 @@ sudo systemctl disable cpulimit.service
 sudo systemctl stop cpulimit.service
 
 # Remove cpulimit.service
-sudo rm /etc/systemd/system/cpulimit.service
+sudo rm -rf /etc/systemd/system/cpulimit.service
 
 # Remove cpulimit.sh
-sudo rm /usr/local/bin/cpulimit.sh
+sudo rm -rf /usr/local/bin/cpulimit.sh
 
 # Remove /etc/cpulimit
 sudo rm -rf /etc/cpulimit
