@@ -3,6 +3,9 @@
 # Get current directory
 DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
 
+# Uninstall first
+source $DIR/uninstall.sh
+
 # Copy $DIR/cpulimit.service to /etc/systemd/system/cpulimit.service
 sudo cp $DIR/cpulimit.service /etc/systemd/system/cpulimit.service
 
@@ -21,5 +24,8 @@ sudo systemctl enable cpulimit.service
 
 # Start cpulimit.service
 sudo systemctl start cpulimit.service
+
+# restart cpulimit.service
+sudo systemctl restart cpulimit.service
 
 printf "\nCompleted cpulimit installation.\n\n"

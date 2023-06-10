@@ -25,4 +25,14 @@ A linux service that limits the cpu/ram usage by killing/pausing the high-consum
 ## How to change the notification body?
 - Edit the configuration file `/etc/cpulimit.conf` and change the value of `notification_body`
 
- 
+## How to check the status of the service?
+- Run `sudo systemctl status cpulimit.service`
+OR
+- Run `service cpulimit status`
+-> This way you can also see the logs of the service !
+
+## How to start the service?
+- Run `sudo systemctl start cpulimit.service`
+
+## How to stop the service?
+- Run `sudo systemctl stop cpulimit.service`
