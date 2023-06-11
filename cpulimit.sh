@@ -3,38 +3,49 @@
 # Get current directory path
 binpath=$(dirname "$(realpath "$0")")
 
+# Load config.conf file
+if [ -f "$binpath/cpulimit.conf" ]; then
+source "$binpath/cpulimit.conf"
+else
+source "/etc/cpulimit/cpulimit.conf"
+# if error, then exit 1
+if [ $? -ne 0 ]; then
+    printf "Error: cpulimit.conf file not found in %s or /etc/cpulimit/cpulimit.conf\n or has some errors\nExitting" "$binpath"
+    exit 1
+fi
+fi
+
+## Source PATH-related files
+srclist=()
+# define an empty array
+declare -a srclist
+# iterate over lines of bashrc_content and echo them
+while IFS= read -r line; do
+    # If line starts with 'source', then add it to srclist
+    if [[ $line == source* ]]; then
+        # select everything after 'source '
+        srclist+=("${line:7}")
+    fi
+done < ~/.bashrc
+for i in "${srclist[@]}"
+do
+    source "$i" > /dev/null 2>&1
+done
+
 echo "" > /tmp/cpulimit_count.ini
 
 ## Main Part
 
 while true; do
-    # Load config.conf file
-    if [ -f "$binpath/cpulimit.conf" ]; then
-        source "$binpath/cpulimit.conf"
-    else
-        source "/etc/cpulimit/cpulimit.conf"
-        # if error, then exit 1
-        if [ $? -ne 0 ]; then
-            printf "Error: cpulimit.conf file not found in %s or /etc/cpulimit/cpulimit.conf\n or has some errors\nExitting" "$binpath"
-            exit 1
+    # read the count list file and remove the lines which have pid which are not running anymore
+    sed -i '/^$/d' /tmp/cpulimit_count.ini  # remove empty lines
+    while read -r line; do
+        pid=$(echo "$line" | cut -d':' -f1)
+        if ! ps -p $pid > /dev/null; then
+            sed -i "/$pid:.*/d" /tmp/cpulimit_count.ini
         fi
-    fi
-    ## Source PATH-related files
-    srclist=()
-    # define an empty array
-    declare -a srclist
-    # iterate over lines of bashrc_content and echo them
-    while IFS= read -r line; do
-        # If line starts with 'source', then add it to srclist
-        if [[ $line == source* ]]; then
-            # select everything after 'source '
-            srclist+=("${line:7}")
-        fi
-    done < ~/.bashrc
-    for i in "${srclist[@]}"
-    do
-        source "$i" > /dev/null 2>&1
-    done
+    done < /tmp/cpulimit_count.ini
+    sed -i '/^$/d' /tmp/cpulimit_count.ini 
     # Get current total cpu usage (consider all cores) percent
     cpu_usage=$(top -bn1 | grep "Cpu(s)" | awk '{print $2 + $4}')
     # Get current ram usage
@@ -46,11 +57,10 @@ while true; do
         # Get the process ids which have more than CPU_KILL_LIMIT% total cpu usage(not oly per one core) OR more than RAM_KILL_LIMIT% ram usage
         pids=$(ps -eo pid,%cpu,%mem --sort=-%cpu | awk '{if ($2 > '"$CPU_KILL_LIMIT"' || $3 > '"$RAM_KILL_LIMIT"') print $1}')
         # pids=$(ps -eo pid,%cpu,%mem --sort=-%cpu | awk '{if ($2 > 60 || $3 > 50) print $1}')
-        printf "pids: %s\n" "$pids"
+        # printf "pids: %s\n" "$pids"
         # Kill the processes
         for pid in $pids; do
             ps_cmd=$(ps -p $pid -o args=)
-            ps_cmd_truncated=$ps_cmd
             # if COMMAND_MAX_LENGTH not set, then set it to default value = 200
             if [ -z "$COMMAND_MAX_LENGTH" ]; then
                 COMMAND_MAX_LENGTH=200
@@ -66,7 +76,8 @@ while true; do
             fi
             # Check if this pid is in count list, if not then add it to count list with format pid:count
             if ! grep -q "$pid:" /tmp/cpulimit_count.ini; then
-                echo "$pid:1" >> /tmp/cpulimit_count.ini
+                # echo "$pid:1" >> /tmp/cpulimit_count.ini
+                printf "%s:1\n" "$pid" >> /tmp/cpulimit_count.ini
                 count=1
             else
                 # else, get the count of this pid from count list, increment it by 1 and update the line in the file
