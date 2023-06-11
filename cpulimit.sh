@@ -39,6 +39,7 @@ while true; do
     cpu_usage=$(top -bn1 | grep "Cpu(s)" | awk '{print $2 + $4}')
     # Get current ram usage
     ram_usage=$(free | grep Mem | awk '{printf "%.2f%%\t\t\n", $3/$2 * 100.0}' | cut -d'%' -f1)
+    # printf "CPU: %s%%\t\tRAM: %s%%\n" "$cpu_usage" "$ram_usage"
     # Check if system cpu usage is more than CPU_USAGE_LIMIT% or ram usage is more than RAM_USAGE_LIMIT%
     if (( $(echo "$cpu_usage > $CPU_USAGE_LIMIT" | bc -l) )) || (( $(echo "$ram_usage > $RAM_USAGE_LIMIT" | bc -l) )); then
         logger -s -t "cpulimit" "HIGH ALERT - CPU: $cpu_usage% - RAM: $ram_usage%"
@@ -68,7 +69,7 @@ while true; do
                         EXCEPTION_COUNT_NOTIF=30
                     fi
                     if [ "$DISCORD_NOTIFICATION" = true ] && (( $count % $EXCEPTION_COUNT_NOTIF== 0 || $count == 1 )); then
-                        msg_body="Process: $pid\nFull Command: $ps_cmd\nis in exceptions list, skipping\nCount: $count"
+                        msg_body="Process: $pid\nFull Command: \`$ps_cmd\`\nis in exceptions list, skipping\nCount: $count"
                         # if DISCORD_CHANNEL_HANDLE is not set, then set it to default value = cpulimit
                         if [ -z "$DISCORD_CHANNEL_HANDLE" ]; then
                             DISCORD_CHANNEL_HANDLE="cpulimit"
@@ -87,7 +88,7 @@ while true; do
                 logger -s -t "cpulimit" "Failed to kill process: $pid - command: $ps_cmd"
                 # If DISCORD_NOTIFICATION is true, run notifio using run_with_path.sh in current directory
                 if [ "$DISCORD_NOTIFICATION" = true ]; then
-                    msg_body="Failed to kill process: $pid\nFull Command: $ps_cmd"
+                    msg_body="Failed to kill process: $pid\nFull Command: \`$ps_cmd\`"
                     # if DISCORD_CHANNEL_HANDLE is not set, then set it to default value = cpulimit
                     if [ -z "$DISCORD_CHANNEL_HANDLE" ]; then
                         DISCORD_CHANNEL_HANDLE="cpulimit"
@@ -96,7 +97,7 @@ while true; do
                 fi
             else
                 logger -s -t "cpulimit" "Killed Process: $pid - command: $ps_cmd"
-                msg_body="Killed Process: $pid\nFull Command: $ps_cmd"
+                msg_body="Killed Process: $pid\nFull Command: \`$ps_cmd\`"
                 if [ "$DISCORD_NOTIFICATION" = true ]; then
                     # if DISCORD_CHANNEL_HANDLE is not set, then set it to default value = cpulimit
                     if [ -z "$DISCORD_CHANNEL_HANDLE" ]; then
