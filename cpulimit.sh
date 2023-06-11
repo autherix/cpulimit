@@ -45,9 +45,25 @@ while true; do
         logger -s -t "cpulimit" "HIGH ALERT - CPU: $cpu_usage% - RAM: $ram_usage%"
         # Get the process ids which have more than CPU_KILL_LIMIT% total cpu usage(not oly per one core) OR more than RAM_KILL_LIMIT% ram usage
         pids=$(ps -eo pid,%cpu,%mem --sort=-%cpu | awk '{if ($2 > '"$CPU_KILL_LIMIT"' || $3 > '"$RAM_KILL_LIMIT"') print $1}')
+        # pids=$(ps -eo pid,%cpu,%mem --sort=-%cpu | awk '{if ($2 > 60 || $3 > 50) print $1}')
+        printf "pids: %s\n" "$pids"
         # Kill the processes
         for pid in $pids; do
             ps_cmd=$(ps -p $pid -o args=)
+            ps_cmd_truncated=$ps_cmd
+            # if COMMAND_MAX_LENGTH not set, then set it to default value = 200
+            if [ -z "$COMMAND_MAX_LENGTH" ]; then
+                COMMAND_MAX_LENGTH=200
+            fi
+            # If ps_cmd is longer than $COMMAND_MAX_LENGTH characters, then truncate it
+            if [ ${#ps_cmd} -gt $COMMAND_MAX_LENGTH ]; then
+                # pick about half of COMMAND_MAX_LENGTH characters from start and end of ps_cmd, +1 if odd number
+                if (( $COMMAND_MAX_LENGTH % 2 == 0 )); then
+                    ps_cmd_truncated="${ps_cmd:0:$((COMMAND_MAX_LENGTH/2))}  .......  ${ps_cmd: -$((COMMAND_MAX_LENGTH/2))}"
+                else
+                    ps_cmd_truncated="${ps_cmd:0:$((COMMAND_MAX_LENGTH+1/2))}  .......  ${ps_cmd: -$((COMMAND_MAX_LENGTH+1/2))}"
+                fi
+            fi
             # Check if this pid is in count list, if not then add it to count list with format pid:count
             if ! grep -q "$pid:" /tmp/cpulimit_count.ini; then
                 echo "$pid:1" >> /tmp/cpulimit_count.ini
@@ -60,8 +76,9 @@ while true; do
             fi
             # Iterate over the items in EXCEPTIONS array (of strings), check each item with process full command, use grep with regex to see if it matches
             for exception in "${EXCEPTIONS[@]}"; do
-                if echo "$ps_cmd" | grep -E "$exception"; then
-                    logger -s -t "cpulimit" "Process: $pid - command: $ps_cmd - is in exceptions list, skipping - Count: $count"
+                # printf "current exception: %s\n" "$exception"
+                if echo "$ps_cmd" | grep -E "$exception" > /dev/null 2>&1 ; then
+                    logger -s -t "cpulimit" "Process: $pid - command: $ps_cmd_truncated - is in exceptions list, skipping - Count: $count"
                     # Add the command to notification exception list
                     # If (DISCORD_NOTIFICATION is true) AND (pid count is a multiple of 10 OR is 1), then send notification
                     # If EXCEPTION_COUNT_NOTIF is not set, then set it to default value = 30
@@ -69,7 +86,7 @@ while true; do
                         EXCEPTION_COUNT_NOTIF=30
                     fi
                     if [ "$DISCORD_NOTIFICATION" = true ] && (( $count % $EXCEPTION_COUNT_NOTIF== 0 || $count == 1 )); then
-                        msg_body="Process: $pid\nFull Command: \`$ps_cmd\`\nis in exceptions list, skipping\nCount: $count"
+                        msg_body="Process: $pid\nFull Command: \`$ps_cmd_truncated\`\nis in exceptions list, skipping\nMatches Pattern: \`$exception\`\nCount: $count"
                         # if DISCORD_CHANNEL_HANDLE is not set, then set it to default value = cpulimit
                         if [ -z "$DISCORD_CHANNEL_HANDLE" ]; then
                             DISCORD_CHANNEL_HANDLE="cpulimit"
@@ -81,14 +98,14 @@ while true; do
             done
 
             ## KILL ## 
-            kill -9 $pid
+            kill -9 $pid > /dev/null 2>&1
 
             # if process with that pid is still running, then log error 
             if ps -p $pid > /dev/null; then
-                logger -s -t "cpulimit" "Failed to kill process: $pid - command: $ps_cmd"
+                logger -s -t "cpulimit" "Failed to kill process: $pid - command: $ps_cmd_truncated"
                 # If DISCORD_NOTIFICATION is true, run notifio using run_with_path.sh in current directory
                 if [ "$DISCORD_NOTIFICATION" = true ]; then
-                    msg_body="Failed to kill process: $pid\nFull Command: \`$ps_cmd\`"
+                    msg_body="Failed to kill process: $pid\nFull Command: \`$ps_cmd_truncated\`"
                     # if DISCORD_CHANNEL_HANDLE is not set, then set it to default value = cpulimit
                     if [ -z "$DISCORD_CHANNEL_HANDLE" ]; then
                         DISCORD_CHANNEL_HANDLE="cpulimit"
@@ -96,8 +113,8 @@ while true; do
                     notifio --title "cpulimit - Failed to Kill Process" --discord -ch $DISCORD_CHANNEL_HANDLE -m "$msg_body" > /dev/null 2>&1 &
                 fi
             else
-                logger -s -t "cpulimit" "Killed Process: $pid - command: $ps_cmd"
-                msg_body="Killed Process: $pid\nFull Command: \`$ps_cmd\`"
+                logger -s -t "cpulimit" "Killed Process: $pid - command: $ps_cmd_truncated"
+                msg_body="Killed Process: $pid\nFull Command: \`$ps_cmd_truncated\`"
                 if [ "$DISCORD_NOTIFICATION" = true ]; then
                     # if DISCORD_CHANNEL_HANDLE is not set, then set it to default value = cpulimit
                     if [ -z "$DISCORD_CHANNEL_HANDLE" ]; then
