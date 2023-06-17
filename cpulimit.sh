@@ -73,6 +73,8 @@ while true; do
                 else
                     ps_cmd_truncated="${ps_cmd:0:$((COMMAND_MAX_LENGTH+1/2))}  .......  ${ps_cmd: -$((COMMAND_MAX_LENGTH+1/2))}"
                 fi
+            else
+                ps_cmd_truncated=$ps_cmd
             fi
             # Check if this pid is in count list, if not then add it to count list with format pid:count
             if ! grep -q "$pid:" /tmp/cpulimit_count.ini; then
@@ -91,12 +93,13 @@ while true; do
                 if echo "$ps_cmd" | grep -E "$exception" > /dev/null 2>&1 ; then
                     logger -s -t "cpulimit" "Process: $pid - command: $ps_cmd_truncated - is in exceptions list, skipping - Count: $count"
                     # Add the command to notification exception list
-                    # If (DISCORD_NOTIFICATION is true) AND (pid count is a multiple of 10 OR is 1), then send notification
                     # If EXCEPTION_COUNT_NOTIF is not set, then set it to default value = 30
                     if [ -z "$EXCEPTION_COUNT_NOTIF" ]; then
                         EXCEPTION_COUNT_NOTIF=30
                     fi
-                    if [ "$DISCORD_NOTIFICATION" = true ] && (( $count % $EXCEPTION_COUNT_NOTIF== 0 || $count == 1 )); then
+                    # If (DISCORD_NOTIFICATION is true) AND (pid count is a multiple of 10), then send notification
+                    if [ "$DISCORD_NOTIFICATION" = true ] && [ $((count % EXCEPTION_COUNT_NOTIF)) -eq 0 ]; then
+                        # if [ "$DISCORD_NOTIFICATION" = true ] && (( $count % $EXCEPTION_COUNT_NOTIF== 0 || $count == 1 )); then
                         msg_body="Process: $pid\nFull Command: \`$ps_cmd_truncated\`\nis in exceptions list, skipping\nMatches Pattern: \`$exception\`\nCount: $count"
                         # if DISCORD_CHANNEL_HANDLE is not set, then set it to default value = cpulimit
                         if [ -z "$DISCORD_CHANNEL_HANDLE" ]; then
