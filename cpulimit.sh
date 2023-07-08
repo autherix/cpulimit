@@ -112,29 +112,51 @@ while true; do
             done
 
             ## KILL ## 
-            kill -9 $pid > /dev/null 2>&1
+            # kill -9 $pid > /dev/null 2>&1
 
-            # if process with that pid is still running, then log error 
-            if ps -p $pid > /dev/null; then
-                logger -s -t "cpulimit" "Failed to kill process: $pid - command: $ps_cmd_truncated"
+            # get the CPU and RAM usage of this process
+            cpu_usage=$(ps -p $pid -o %cpu | tail -n 1)
+            ram_usage=$(ps -p $pid -o %mem | tail -n 1)
+
+            # the limited usage should be 70% of the current usage
+            cpu_limit=$(echo "$cpu_usage * 0.7" | bc -l)
+            
+            # renice -n 19 -p $pid > /dev/null 2>&1
+            cpulimit -p $pid -l $cpu_limit -z &
+
+            sleep 1
+
+            # get the CPU and RAM usage of this process
+            cpu_usage=$(ps -p $pid -o %cpu | tail -n 1)
+            ram_usage=$(ps -p $pid -o %mem | tail -n 1)
+            total_cpu_usage=$(top -bn1 | grep "Cpu(s)" | awk '{print $2 + $4}')
+            total_ram_usage=$(free | grep Mem | awk '{printf "%.2f%%\t\t\n", $3/$2 * 100.0}' | cut -d'%' -f1)
+
+            # if process with that pid is still using high CPU or RAM, then log error
+            if (( $(echo "$cpu_usage > $CPU_KILL_LIMIT" | bc -l) )) || (( $(echo "$ram_usage > $RAM_KILL_LIMIT" | bc -l) )); then
+                logger -s -t "cpulimit" "Failed to limit process: $pid - command: $ps_cmd_truncated"
                 # If DISCORD_NOTIFICATION is true, run notifio using run_with_path.sh in current directory
                 if [ "$DISCORD_NOTIFICATION" = true ]; then
-                    msg_body="Failed to kill process: $pid\nFull Command: \`$ps_cmd_truncated\`"
+                    # Get the CPU and RAM usage again
+                    msg_body="Failed to limit process: $pid\nSystem Load: CPU: $total_cpu_usage% - RAM: $total_ram_usage%\nProcess Usage: CPU: $cpu_usage% - RAM: $ram_usage%\nFull Command: \`$ps_cmd_truncated\`"
                     # if DISCORD_CHANNEL_HANDLE is not set, then set it to default value = cpulimit
                     if [ -z "$DISCORD_CHANNEL_HANDLE" ]; then
                         DISCORD_CHANNEL_HANDLE="cpulimit"
                     fi
-                    notifio --title "cpulimit - Failed to Kill Process" --discord -ch $DISCORD_CHANNEL_HANDLE -m "$msg_body" > /dev/null 2>&1 &
+                    notifio --title "cpulimit - Failed to Limit Process" --discord -ch $DISCORD_CHANNEL_HANDLE -m "$msg_body" > /dev/null 2>&1 &
                 fi
             else
-                logger -s -t "cpulimit" "Killed Process: $pid - command: $ps_cmd_truncated"
-                msg_body="Killed Process: $pid\nFull Command: \`$ps_cmd_truncated\`"
+                logger -s -t "cpulimit" "Limited Process: $pid - command: $ps_cmd_truncated"
+                # logger -s -t "cpulimit" "Killed Process: $pid - command: $ps_cmd_truncated"
+                msg_body="Limited Process: $pid\nSystem Load: CPU: $total_cpu_usage% - RAM: $total_ram_usage%\nProcess Usage: CPU: $cpu_usage% - RAM: $ram_usage%\nFull Command: \`$ps_cmd_truncated\`"
+                # msg_body="Killed Process: $pid\nFull Command: \`$ps_cmd_truncated\`"
                 if [ "$DISCORD_NOTIFICATION" = true ]; then
                     # if DISCORD_CHANNEL_HANDLE is not set, then set it to default value = cpulimit
                     if [ -z "$DISCORD_CHANNEL_HANDLE" ]; then
                         DISCORD_CHANNEL_HANDLE="cpulimit"
                     fi
-                    notifio --title "cpulimit - Killed Process" --discord -ch $DISCORD_CHANNEL_HANDLE -m "$msg_body" > /dev/null 2>&1 &
+                    notifio --title "cpulimit - Limited Process" --discord -ch $DISCORD_CHANNEL_HANDLE -m "$msg_body" > /dev/null 2>&1 &
+                    # notifio --title "cpulimit - Killed Process" --discord -ch $DISCORD_CHANNEL_HANDLE -m "$msg_body" > /dev/null 2>&1 &
                 fi
             fi
         done
